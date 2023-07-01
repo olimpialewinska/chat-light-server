@@ -1,10 +1,11 @@
 import express, { Express, Request, Response } from "express";
 import dotenv from "dotenv";
 import multer from "multer";
-import { askGpt, getSystemPrompt } from "./utils/prompt";
+import { OpenAIMessage, askGpt, getSystemPrompt } from "./utils/prompt";
 import { readFromImage } from "./utils/readFromImages";
 import path from "path";
-import { filterMessages } from "./utils/messagesFilter";
+import { filterMessages, regex } from "./utils/messagesFilter";
+import { CreateChatCompletionRequest } from "openai";
 
 const uploadPath = path.join(__dirname, "uploads");
 
@@ -32,33 +33,34 @@ app.get("/", (req: Request, res: Response) => {
 
 app.post("/askGpt", upload.array("files"), async (req, res) => {
   try {
-    const messages = JSON.parse(req.body.messages);
-    let lastMessage = messages[messages.length - 1];
+    const messages: OpenAIMessage[] = JSON.parse(req.body.messages);
+    let lastMessage: OpenAIMessage = messages[messages.length - 1];
     const files = req.files;
-    if (
-      (!lastMessage || lastMessage === "" || lastMessage === "undefined") &&
-      (!files || files.length === 0)
-    ) {
+    if (!lastMessage.content && (!files || files.length === 0)) {
       res.send("Prompt is empty");
       return;
     }
 
     const context = filterMessages(messages);
 
+    if (regex.test(lastMessage.content)) lastMessage.content = "";
+
     if (files && (files as any).length > 0) {
       for (const file of files as Express.Multer.File[]) {
         const text = await readFromImage(file.path);
-        messages[messages.length - 1] = lastMessage
-          ? lastMessage + " " + text
-          : text;
+        lastMessage.content = text
+          ? ((lastMessage.content + " " + text) as string)
+          : (text as string);
       }
     }
+
     const response = await askGpt([
       {
         role: "system",
         content: getSystemPrompt(),
       },
-      ...context,
+      ...(context as any),
+      lastMessage,
     ]);
     res.send(response);
   } catch (e) {

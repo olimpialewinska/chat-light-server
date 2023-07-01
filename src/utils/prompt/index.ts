@@ -13,7 +13,10 @@ export function getSystemPrompt() {
   return `You are a helpful assistant.`;
 }
 
-export type OpenAIMessage = CreateChatCompletionRequest["messages"][0];
+export type OpenAIMessage = {
+  role: "user" | "system" | "assistant";
+  content: string;
+};
 
 export async function askGpt(messages: OpenAIMessage[]) {
   try {
